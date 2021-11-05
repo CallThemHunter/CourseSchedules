@@ -1,4 +1,5 @@
 import requests
+import requests.adapters
 import json
 import os
 from requests.structures import CaseInsensitiveDict
@@ -126,7 +127,9 @@ exitFlag = 0
 threads = []
 queueLock = threading.Lock()
 workQueue = queue.Queue(120)
-
+session = requests.session()
+adapter = requests.adapters.HTTPAdapter(pool_connections=25, pool_maxsize=25)
+session.mount('http://', adapter)
 
 class MyThread (threading.Thread):
     def __init__(self, threadID, name, department):
@@ -147,7 +150,7 @@ class MyThread (threading.Thread):
         ret = []
         for course in range(100, 801):
             ret += get_department_course(department, str(course))
-            time.sleep(.5)
+            # time.sleep(.5)
         return ret
 
 
@@ -157,14 +160,23 @@ def get_department_course(department, number):
     headers = CaseInsensitiveDict()
     headers["Authorization"] = authorization
 
-    resp = requests.get(req, headers=headers)
-    json_out = resp.json()
-    if 'exam' in json_out:
-        return [json_out]
-    elif json_out['total'] == 0:
-        return []
+    resp = session.get(req, headers=headers)
+    if resp.status_code == 200:
+        if resp.text == '':
+            return []
+        try:
+            json_out = resp.json()
+        except Exception as err:
+            print("what the fuck")
+            return []
+        if 'exam' in json_out:
+            return [json_out]
+        elif json_out['total'] == 0:
+            return []
+        else:
+            return resp.json()['courses']
     else:
-        return resp.json()['courses']
+        return []
 
 
 def get_all_courses():
